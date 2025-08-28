@@ -19,6 +19,11 @@ impl Part {
     }
 }
 
+pub fn read_bom(file_path: &str) -> Vec<Part> {
+    let mut parts = Vec::new();
+    parts
+}
+
 pub fn part_numbers_match(p1: &Part, p2: &Part) -> bool {
     string_partial_match(&p1.id, &p2.id)
 }
@@ -52,7 +57,7 @@ pub fn bom_contains_part(bom: &Vec<Part>, part: &Part) -> bool {
     return false;
 }
 
-pub fn filter_dropped_parts(old: &Vec<Part>, new: &Vec<Part>) -> Vec<Vec<Part>> {
+pub fn filter_removed_parts(old: &Vec<Part>, new: &Vec<Part>) -> Vec<Part> {
     let mut dropped = Vec::new();
     let mut old_reduced = old.clone();
     for old_part in old {
@@ -61,10 +66,10 @@ pub fn filter_dropped_parts(old: &Vec<Part>, new: &Vec<Part>) -> Vec<Vec<Part>> 
             old_reduced = remove_part_by_id_match(old_reduced.clone(), &old_part);
         }
     }
-    vec![old_reduced, new.clone(), dropped]
+    dropped
 }
 
-pub fn filter_new_parts(old: &Vec<Part>, new: &Vec<Part>) -> Vec<Vec<Part>> {
+pub fn filter_added_parts(old: &Vec<Part>, new: &Vec<Part>) -> Vec<Part> {
     let mut added = Vec::new();
     let mut new_reduced = new.clone();
     for new_part in new {
@@ -73,14 +78,14 @@ pub fn filter_new_parts(old: &Vec<Part>, new: &Vec<Part>) -> Vec<Vec<Part>> {
             new_reduced = remove_part_by_id_match(new_reduced, &new_part);
         }
     }
-    vec![old.clone(), new_reduced.clone(), added]
+    added
 }
 
 pub fn remove_part_by_id_match(parts: Vec<Part>, part: &Part) -> Vec<Part> {
     parts.into_iter().filter(|p| p.id != part.id).collect()
 }
 
-pub fn filter_unchanged_parts(old: &Vec<Part>, new: &Vec<Part>) -> Vec<Vec<Part>> {
+pub fn filter_unchanged_parts(old: &Vec<Part>, new: &Vec<Part>) -> Vec<Part> {
     let mut unchanged = Vec::new();
     let mut old_reduced = old.clone();
     let mut new_reduced = new.clone();
@@ -99,5 +104,40 @@ pub fn filter_unchanged_parts(old: &Vec<Part>, new: &Vec<Part>) -> Vec<Vec<Part>
             }
         }
     }
-    vec![old_reduced, new_reduced, unchanged]
+    unchanged
+}
+
+pub fn filter_quantity_changed_parts(old: &Vec<Part>, new: &Vec<Part>) -> Vec<Part> {
+    let mut changed = Vec::new();
+    let mut old_reduced = old.clone();
+    let mut new_reduced = new.clone();
+    for old_part in old {
+        if bom_contains_part(new, old_part) {
+            let new_part = get_part_by_num(new, old_part.id.clone());
+            match new_part {
+                Some(part) => {
+                    if old_part.quantity != part.quantity {
+                        let mut changed_part = part.clone();
+                        changed_part.quantity = part.quantity - old_part.quantity;
+                        changed.push(changed_part);
+                        old_reduced = remove_part_by_id_match(old_reduced, &part);
+                        new_reduced = remove_part_by_id_match(new_reduced, &part);
+                    }
+                }
+                None => (),
+            }
+        }
+    }
+    changed
+}
+
+pub fn compare_boms(
+    old: &Vec<Part>,
+    new: &Vec<Part>,
+) -> (Vec<Part>, Vec<Part>, Vec<Part>, Vec<Part>) {
+    let unchanged = filter_unchanged_parts(old, new);
+    let changed = filter_quantity_changed_parts(old, new);
+    let added = filter_added_parts(old, new);
+    let removed = filter_removed_parts(old, new);
+    (unchanged, changed, added, removed)
 }

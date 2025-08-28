@@ -1,7 +1,9 @@
 [package]
 name = "bom_diff"
 version = "0.1.0"
-edition = "2025"
+edition = "2024"
 
 [dependencies]
 iced = "0.13"
+rfd = "0.15.4"
+csv = "1.3.1"

@@ -1,41 +1,98 @@
 mod bom;
-use iced::widget::{Column, button, column, text};
+use iced::widget::{Column, button, column, text_input};
+use rfd::FileDialog;
+use std::fs::File;
+use std::path::Path;
+use std::{error::Error, io, process};
 
 #[derive(Default)]
-struct Counter {
-    value: i32,
+struct State {
+    bom1_path: String,
+    bom2_path: String,
+    output_path: String,
+    output_filename: String,
 }
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum Message {
-    Increment,
-    Decrement,
+    PickBOM1,
+    PickBOM2,
+    PickOutputPath,
+    ChangedFilename(String),
+    Compare,
 }
 
-impl Counter {
+impl State {
     pub fn view(&self) -> Column<Message> {
-        // We use a column: a simple vertical layout
         column![
-            // The increment button. We tell it to produce an
-            // `Increment` message when pressed
-            button("+").on_press(Message::Increment),
-            // We show the value of the counter here
-            text(self.value).size(50),
-            // The decrement button. We tell it to produce a
-            // `Decrement` message when pressed
-            button("-").on_press(Message::Decrement),
+            button("Pick Old BOM").on_press(Message::PickBOM1),
+            button("Pick New BOM").on_press(Message::PickBOM2),
+            button("Pick Output Path").on_press(Message::PickOutputPath),
+            text_input("Type something here...", &self.output_filename)
+                .on_input(Message::ChangedFilename),
+            button("Compare BOMs").on_press(Message::Compare),
         ]
     }
     pub fn update(&mut self, message: Message) {
         match message {
-            Message::Increment => {
-                self.value += 1;
+            Message::PickBOM1 => match self.get_file_path() {
+                Some(path) => {
+                    self.bom1_path = path;
+                }
+                None => (),
+            },
+            Message::PickBOM2 => match self.get_file_path() {
+                Some(path) => {
+                    self.bom2_path = path;
+                }
+                None => (),
+            },
+            Message::PickOutputPath => match self.get_file_path() {
+                Some(path) => {
+                    self.output_path = path;
+                }
+                None => (),
+            },
+            Message::ChangedFilename(filename) => {
+                self.output_filename = filename;
             }
-            Message::Decrement => {
-                self.value -= 1;
+            Message::Compare => {
+                let old = bom::read_bom(&self.bom1_path);
+                let new = bom::read_bom(&self.bom2_path);
+                let (unchanged, changed, added, removed) = bom::compare_boms(&old, &new);
             }
         }
     }
+    pub fn get_file_path(&self) -> Option<String> {
+        let file = FileDialog::new()
+            .add_filter("csv", &["csv"])
+            // .add_filter("spreadsheet", &["xls", "xlsx", "ods"])
+            .set_directory("/")
+            .pick_file();
+        match file {
+            Some(path) => Some(path.to_string_lossy().into_owned()),
+            None => None,
+        }
+    }
 }
+
+pub fn read_csv<P: AsRef<Path>>(filename: P) -> Result<Vec<Vec<String>>, Box<dyn Error>> {
+    let file = File::open(filename)?;
+    let mut rdr = csv::Reader::from_reader(file);
+    let mut data = Vec::new();
+    for result in rdr.records() {
+        let record = result?;
+        println!("{:?}", record);
+        let mut line = Vec::new();
+        for field in &record {
+            line.push(field.to_string());
+            println!("{:?}", field);
+        }
+
+        data.push(line);
+    }
+    Ok(data)
+}
+
 fn main() -> iced::Result {
-    iced::run("A cool counter", Counter::update, Counter::view)
+    iced::run("BOM Diff", State::update, State::view)
 }

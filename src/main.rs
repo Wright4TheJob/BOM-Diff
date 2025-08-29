@@ -1,5 +1,6 @@
 mod bom;
-use iced::widget::{Column, button, column, text_input};
+use iced::alignment::Vertical::Bottom;
+use iced::widget::{Column, button, checkbox, column, row, text, text_input};
 use rfd::FileDialog;
 use std::fs::File;
 use std::path::Path;
@@ -11,6 +12,7 @@ struct State {
     bom2_path: String,
     output_path: String,
     output_filename: String,
+    has_headers: bool,
 }
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -19,16 +21,23 @@ pub enum Message {
     PickOutputPath,
     ChangedFilename(String),
     Compare,
+    HasHeaders(bool),
 }
 
 impl State {
     pub fn view(&self) -> Column<Message> {
         column![
-            button("Pick Old BOM").on_press(Message::PickBOM1),
-            button("Pick New BOM").on_press(Message::PickBOM2),
+            row![
+                button("Pick Old BOM").on_press(Message::PickBOM1),
+                text(format!("Old BOM: {}", self.bom1_path))
+            ],
+            row![
+                button("Pick New BOM").on_press(Message::PickBOM2),
+                text(format!("New BOM: {}", self.bom2_path))
+            ],
             button("Pick Output Path").on_press(Message::PickOutputPath),
-            text_input("Type something here...", &self.output_filename)
-                .on_input(Message::ChangedFilename),
+            text_input("Output_BOM.csv", &self.output_filename).on_input(Message::ChangedFilename),
+            checkbox("Data has headers", self.has_headers).on_toggle(Message::HasHeaders),
             button("Compare BOMs").on_press(Message::Compare),
         ]
     }
@@ -60,6 +69,7 @@ impl State {
                 let new = bom::read_bom(&self.bom2_path);
                 let (unchanged, changed, added, removed) = bom::compare_boms(&old, &new);
             }
+            Message::HasHeaders(headers) => self.has_headers = headers,
         }
     }
     pub fn get_file_path(&self) -> Option<String> {

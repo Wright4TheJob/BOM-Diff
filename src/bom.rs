@@ -1,3 +1,4 @@
+use std::fmt;
 #[derive(Debug, Clone)]
 pub struct Part {
     pub id: String,
@@ -13,15 +14,15 @@ impl Part {
             self.quantity.to_string(),
         ]
     }
-
-    pub fn to_string(&self) -> String {
-        self.id.clone() + " - " + &self.description + " - " + &self.quantity.to_string()
+}
+impl fmt::Display for Part {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} {} {}", self.id, self.description, self.quantity)
     }
 }
-
 pub fn read_bom(file_path: &str) -> Vec<Part> {
-    let mut parts = Vec::new();
-    parts
+    todo!("Actually import the BOMs!");
+    Vec::new()
 }
 
 pub fn part_numbers_match(p1: &Part, p2: &Part) -> bool {
@@ -32,8 +33,8 @@ pub fn string_partial_match(s1: &String, s2: &String) -> bool {
     s1 == s2 || s1.contains(s2) || s2.contains(s1)
 }
 
-pub fn get_part_by_num(parts: &Vec<Part>, id: String) -> Option<Part> {
-    let parts_owned = parts.clone();
+pub fn get_part_by_num(parts: &[Part], id: String) -> Option<Part> {
+    let parts_owned = parts.to_owned();
     let matches: Vec<Part> = parts_owned
         .into_iter()
         .filter(|p| string_partial_match(&p.id, &id))
@@ -43,7 +44,7 @@ pub fn get_part_by_num(parts: &Vec<Part>, id: String) -> Option<Part> {
         1 => Some(matches[0].clone()),
         _ => {
             println!("More than one match found, returning first one");
-            return Some(matches[0].clone());
+            Some(matches[0].clone())
         }
     }
 }
@@ -54,7 +55,7 @@ pub fn bom_contains_part(bom: &Vec<Part>, part: &Part) -> bool {
             return true;
         }
     }
-    return false;
+    false
 }
 
 pub fn filter_removed_parts(old: &Vec<Part>, new: &Vec<Part>) -> Vec<Part> {
@@ -63,7 +64,7 @@ pub fn filter_removed_parts(old: &Vec<Part>, new: &Vec<Part>) -> Vec<Part> {
     for old_part in old {
         if !bom_contains_part(new, old_part) {
             dropped.push(old_part.clone());
-            old_reduced = remove_part_by_id_match(old_reduced.clone(), &old_part);
+            old_reduced = remove_part_by_id_match(old_reduced.clone(), old_part);
         }
     }
     dropped
@@ -75,7 +76,7 @@ pub fn filter_added_parts(old: &Vec<Part>, new: &Vec<Part>) -> Vec<Part> {
     for new_part in new {
         if !bom_contains_part(old, new_part) {
             added.push(new_part.clone());
-            new_reduced = remove_part_by_id_match(new_reduced, &new_part);
+            new_reduced = remove_part_by_id_match(new_reduced, new_part);
         }
     }
     added
@@ -92,15 +93,12 @@ pub fn filter_unchanged_parts(old: &Vec<Part>, new: &Vec<Part>) -> Vec<Part> {
     for old_part in old {
         if bom_contains_part(new, old_part) {
             let new_part = get_part_by_num(new, old_part.id.clone());
-            match new_part {
-                Some(part) => {
-                    if old_part.quantity == part.quantity {
-                        unchanged.push(part.clone());
-                        old_reduced = remove_part_by_id_match(old_reduced, &part);
-                        new_reduced = remove_part_by_id_match(new_reduced, &part);
-                    }
-                }
-                None => (),
+            if let Some(part) = new_part
+                && old_part.quantity == part.quantity
+            {
+                unchanged.push(part.clone());
+                old_reduced = remove_part_by_id_match(old_reduced, &part);
+                new_reduced = remove_part_by_id_match(new_reduced, &part);
             }
         }
     }
@@ -114,17 +112,14 @@ pub fn filter_quantity_changed_parts(old: &Vec<Part>, new: &Vec<Part>) -> Vec<Pa
     for old_part in old {
         if bom_contains_part(new, old_part) {
             let new_part = get_part_by_num(new, old_part.id.clone());
-            match new_part {
-                Some(part) => {
-                    if old_part.quantity != part.quantity {
-                        let mut changed_part = part.clone();
-                        changed_part.quantity = part.quantity - old_part.quantity;
-                        changed.push(changed_part);
-                        old_reduced = remove_part_by_id_match(old_reduced, &part);
-                        new_reduced = remove_part_by_id_match(new_reduced, &part);
-                    }
-                }
-                None => (),
+            if let Some(part) = new_part
+                && old_part.quantity != part.quantity
+            {
+                let mut changed_part = part.clone();
+                changed_part.quantity = part.quantity - old_part.quantity;
+                changed.push(changed_part);
+                old_reduced = remove_part_by_id_match(old_reduced, &part);
+                new_reduced = remove_part_by_id_match(new_reduced, &part);
             }
         }
     }

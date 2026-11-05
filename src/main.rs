@@ -1,10 +1,9 @@
 mod bom;
+use csv::Writer;
 use iced::widget::{Column, button, checkbox, column, row, text, text_input};
 use rfd::FileDialog;
-use std::error::Error;
 use std::fs::File;
 use std::path::Path;
-
 #[derive(Default)]
 struct State {
     bom1_path: String,
@@ -84,17 +83,45 @@ impl State {
                 self.output_filename = filename;
             }
             Message::Compare => {
-                let old = bom::read_bom(&self.bom1_path);
-                let new = bom::read_bom(&self.bom2_path);
+                let mut old = bom::read_bom(&self.bom1_path, 1, 0, 2);
+                old.consolidate();
+                let mut new = bom::read_bom(&self.bom2_path, 1, 0, 2);
+                new.consolidate();
                 let (unchanged, changed, added, removed) = bom::compare_boms(&old, &new);
-                println!("Unchanged:");
-                unchanged.iter().for_each(|p| println!("{p}"));
-                println!("Changed Quantity:");
-                changed.iter().for_each(|p| println!("{p}"));
-                println!("Added:");
-                added.iter().for_each(|p| println!("{p}"));
-                println!("Removed:");
-                removed.iter().for_each(|p| println!("{p}"));
+                // println!("Unchanged:");
+                // unchanged.parts.iter().for_each(|p| println!("{p}"));
+                // println!("Changed Quantity:");
+                // changed.parts.iter().for_each(|p| println!("{p}"));
+                // println!("Added:");
+                // added.parts.iter().for_each(|p| println!("{p}"));
+                // println!("Removed:");
+                // removed.parts.iter().for_each(|p| println!("{p}"));
+
+                let output_full_path = Path::new(&self.output_path);
+                let full_path = output_full_path.join(self.output_filename.clone());
+                let file = File::create(full_path).unwrap();
+                // Wrap the file in a writer.
+                let mut wtr = Writer::from_writer(file);
+
+                // Write header and data rows.
+                wtr.write_record(["Unchanged parts", "", ""]).unwrap();
+                for part in unchanged.parts {
+                    wtr.write_record(part.export_as_row()).unwrap();
+                }
+                wtr.write_record(["Changed parts", "", ""]).unwrap();
+                for part in changed.parts {
+                    wtr.write_record(part.export_as_row()).unwrap();
+                }
+                wtr.write_record(["Added parts", "", ""]).unwrap();
+                for part in added.parts {
+                    wtr.write_record(part.export_as_row()).unwrap();
+                }
+                wtr.write_record(["Removed parts", "", ""]).unwrap();
+                for part in removed.parts {
+                    wtr.write_record(part.export_as_row()).unwrap();
+                }
+                // Ensure data is written to disk.
+                wtr.flush().unwrap();
             }
             Message::HasHeaders(headers) => self.has_headers = headers,
         }
@@ -117,23 +144,23 @@ impl State {
     }
 }
 
-pub fn read_csv<P: AsRef<Path>>(filename: P) -> Result<Vec<Vec<String>>, Box<dyn Error>> {
-    let file = File::open(filename)?;
-    let mut rdr = csv::Reader::from_reader(file);
-    let mut data = Vec::new();
-    for result in rdr.records() {
-        let record = result?;
-        println!("{:?}", record);
-        let mut line = Vec::new();
-        for field in &record {
-            line.push(field.to_string());
-            println!("{:?}", field);
-        }
-
-        data.push(line);
-    }
-    Ok(data)
-}
+// pub fn read_csv<P: AsRef<Path>>(filename: P) -> Result<Vec<Vec<String>>, Box<dyn Error>> {
+//     let file = File::open(filename)?;
+//     let mut rdr = csv::Reader::from_reader(file);
+//     let mut data = Vec::new();
+//     for result in rdr.records() {
+//         let record = result?;
+//         println!("{:?}", record);
+//         let mut line = Vec::new();
+//         for field in &record {
+//             line.push(field.to_string());
+//             println!("{:?}", field);
+//         }
+//
+//         data.push(line);
+//     }
+//     Ok(data)
+// }
 
 fn main() -> iced::Result {
     iced::run(State::update, State::view)
